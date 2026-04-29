@@ -1,0 +1,13 @@
+[project]
+name = "nanoagents"
+version = "0.1.0"
+description = "A multi-agent framework built just for educational and learning purpose"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "openai>=2.33.0",
+    "pydantic>=2.13.3",
+    "requests>=2.33.1",
+    "typing-extensions>=4.15.0",
+]
+
