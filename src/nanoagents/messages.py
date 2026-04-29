@@ -94,3 +94,68 @@ class ToolMessage(BaseMessage):
         default_factory=dict, description="Tool specific metadata (e.g. sub-agent usage)"
     )
         
+
+class MultiModalMessage(BaseMessage):
+    """Message supporting multiple content types (text, images, audio etc.)."""
+
+    role: Literal["assistant", "user"] = Field(..., description="Message role")
+    mime_type: str = Field(
+        ...,
+        description="MIME (Multipurpose Internet Mail Extensions) type of content (e.g., 'text/plain', 'image/jpg', 'audio/wav', 'video/mp4)"
+    )
+    data: Optional[Union[bytes, str]] = Field(
+        default=None, description="Binary data (bytes) or base64 string for the content"
+    )
+    media_url: Optional[str] = Field(
+        default=None, description="URL to media content if data is not provided"
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional content metadata"
+    )
+
+    @model_validator(mode='after')
+    def validate_media_data(self):
+        """Ensure either data or media_url is provided."""
+
+        if self.data is None and self.media_url is None:
+            raise ValueError("Either 'data' or 'media_url' must be provided")
+        
+        if self.data is not None and self.media_url is not None:
+            raise ValueError("Only one of 'data' or 'media_url' should be provided")
+        
+        return self
+    
+    def is_text(self) -> bool:
+        """Check if this is a text message."""
+        return self.mime_type.startswith('text/')
+    
+    def is_image(self) -> bool:
+        """Check if this is a image message"""
+        return self.mime_type.startswith('image/')
+    
+    def is_audio(self) -> bool:
+        """Check if this is an audio message."""
+        return self.mime_type.startswith("audio/")
+
+    def is_video(self) -> bool:
+        """Check if this is a video message."""
+        return self.mime_type.startswith("video/")
+    
+    def to_base64(self) -> Optional[str]:
+        """Convert data to base64 string for API usage."""
+        if self.data is None:
+            return None
+        
+        if isinstance(self.data, str):
+            return self.data
+        
+        # if data is bytes, encode to base64
+        import base64
+
+        return base64.b64decode(self.data).decode("utf-8")
+    
+
+# Union type for all message types 
+Message = Union[
+    SystemMessage, AssistantMessage, UserMessage, ToolMessage, MultiModalMessage
+]
