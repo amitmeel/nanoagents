@@ -1,17 +1,27 @@
-"""Core messages types for agent communication using pydantic models.
+"""
+Core messages types for agent communication using pydantic models.
 
 This module defines the structured message types that agents used to communicate
-with each other and with LLM, following the OpenAI API format."""
+with each other and with LLM, following the OpenAI API format.
+"""
 
 from datetime import datetime
-from typing import Any, Dict, List, Literal, Optional, Union, TYPE_CHECKING
+from typing import TYPE_CHECKING, Any, Dict, List, Literal, Optional, Union
 
-from pydantic import BaseModel, Field, model_validator, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field, model_validator
+
+if TYPE_CHECKING:
+    from .types import Usage
+
 
 class BaseMessage(BaseModel):
     content: str = Field(..., description="The message content")
-    source: str = Field(..., description="Source of the message (agent name, system, user, etc.)")
-    timestamp: datetime = Field(default_factory=datetime.now, description="When the message was created")
+    source: str = Field(
+        ..., description="Source of the message (agent name, system, user, etc.)"
+    )
+    timestamp: datetime = Field(
+        default_factory=datetime.now, description="When the message was created"
+    )
 
     model_config = ConfigDict(frozen=True)
 
@@ -19,29 +29,35 @@ class BaseMessage(BaseModel):
         """Returns a user friendly string representation."""
         time_str = self.timestamp.strftime("%H:%M:%S")
         return f"[{self.source}] {time_str} | {self.content}"
-    
+
     def __repr__(self) -> str:
         """Returns a developer friendly representation."""
         class_name = self.__class__.__name__
-        return f"{class_name}(source='{self.source}', content='{self.content[:50]}...', timestamp='{self.timestamp}')"
+        return (
+            f"{class_name}(source='{self.source}', content='{self.content[:50]}...', "
+            f"timestamp='{self.timestamp}')"
+        )
 
 
 class SystemMessage(BaseMessage):
     """System message containing the instructions/role definition for the agent."""
+
     role: Literal["system"] = Field(default="system", description="Message role")
 
 
 class UserMessage(BaseMessage):
     """User message containing input from human or external system."""
+
     role: Literal["user"] = Field(default="user", description="Message role")
     name: Optional[str] = Field(default=None, description="Optional name of the user")
 
 
 class ToolCallRequest(BaseModel):
     """Structured representation of an LLM's tool call request."""
-    tool_name: str = Field(..., description="Name of th tool to call")
+
+    tool_name: str = Field(..., description="Name of the tool to call")
     parameters: Dict[str, Any] = Field(..., description="Arguments for the tool")
-    call_id: str = Field(..., description="Unique identifier for this tool call")
+    call_id: str = Field(..., description="Unique identifier for this call")
 
     model_config = ConfigDict(frozen=True)
 
@@ -52,26 +68,32 @@ class AssistantMessage(BaseMessage):
     role: Literal["assistant"] = Field(default="assistant", description="Message role")
     tool_calls: Optional[List[ToolCallRequest]] = Field(
         default=None, description="Tool calls made by the assistant."
-        )
+    )
     structured_content: Optional[BaseModel] = Field(
         default=None, description="Strucutred data when output_format is used."
     )
-    usage: Optional["Usage"] = Field(default=None, description="Token usage for this LLM call.")
+    usage: Optional["Usage"] = Field(
+        default=None, description="Token usage for this LLM call."
+    )
 
     def __str__(self) -> str:
         """Returns a user friendly string representation."""
         time_str = self.timestamp.strftime("%H:%M:%S")
 
         if self.tool_calls:
-            "Show tool calls information"
+            # Show tool calls information
             tool_info = ", ".join(
                 [
-                    f"{tc.tool_name}({', '.join(f'{k}={v}' for k,v in tc.parameters.items())})"
+                    (
+                        f"{tc.tool_name}("
+                        f"{', '.join(f'{k}={v}' for k, v in tc.parameters.items())}"
+                        ")"
+                    )
                     for tc in self.tool_calls
                 ]
             )
             if self.content and self.content.strip():
-                return(
+                return (
                     f"[{self.source}] {time_str} | {self.content} [tools: {tool_info}]"
                 )
             else:
@@ -91,9 +113,10 @@ class ToolMessage(BaseMessage):
     success: bool = Field(..., description="Whether tool execution succeeded")
     error: Optional[str] = Field(default=None, description="Error message if failed")
     metadata: Dict[str, Any] = Field(
-        default_factory=dict, description="Tool specific metadata (e.g. sub-agent usage)"
+        default_factory=dict,
+        description="Tool specific metadata (e.g. sub-agent usage)",
     )
-        
+
 
 class MultiModalMessage(BaseMessage):
     """Message supporting multiple content types (text, images, audio etc.)."""
@@ -101,7 +124,10 @@ class MultiModalMessage(BaseMessage):
     role: Literal["assistant", "user"] = Field(..., description="Message role")
     mime_type: str = Field(
         ...,
-        description="MIME (Multipurpose Internet Mail Extensions) type of content (e.g., 'text/plain', 'image/jpg', 'audio/wav', 'video/mp4)"
+        description=(
+            "MIME (Multipurpose Internet Mail Extensions) type of content "
+            "(e.g., 'text/plain', 'image/jpeg', 'audio/wav', 'video/mp4')"
+        ),
     )
     data: Optional[Union[bytes, str]] = Field(
         default=None, description="Binary data (bytes) or base64 string for the content"
@@ -113,26 +139,26 @@ class MultiModalMessage(BaseMessage):
         default_factory=dict, description="Additional content metadata"
     )
 
-    @model_validator(mode='after')
+    @model_validator(mode="after")
     def validate_media_data(self):
         """Ensure either data or media_url is provided."""
 
         if self.data is None and self.media_url is None:
             raise ValueError("Either 'data' or 'media_url' must be provided")
-        
+
         if self.data is not None and self.media_url is not None:
             raise ValueError("Only one of 'data' or 'media_url' should be provided")
-        
+
         return self
-    
+
     def is_text(self) -> bool:
         """Check if this is a text message."""
-        return self.mime_type.startswith('text/')
-    
+        return self.mime_type.startswith("text/")
+
     def is_image(self) -> bool:
         """Check if this is a image message"""
-        return self.mime_type.startswith('image/')
-    
+        return self.mime_type.startswith("image/")
+
     def is_audio(self) -> bool:
         """Check if this is an audio message."""
         return self.mime_type.startswith("audio/")
@@ -140,22 +166,22 @@ class MultiModalMessage(BaseMessage):
     def is_video(self) -> bool:
         """Check if this is a video message."""
         return self.mime_type.startswith("video/")
-    
+
     def to_base64(self) -> Optional[str]:
         """Convert data to base64 string for API usage."""
         if self.data is None:
             return None
-        
+
         if isinstance(self.data, str):
             return self.data
-        
+
         # if data is bytes, encode to base64
         import base64
 
         return base64.b64decode(self.data).decode("utf-8")
-    
 
-# Union type for all message types 
+
+# Union type for all message types
 Message = Union[
     SystemMessage, AssistantMessage, UserMessage, ToolMessage, MultiModalMessage
 ]
