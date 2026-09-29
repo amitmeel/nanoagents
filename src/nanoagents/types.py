@@ -204,4 +204,33 @@ class ChatCompletionChunk(BaseModel):
     model_config =ConfigDict(frozen=True)
 
 
+# Base event class for Streaming
+class BaseEvent(BaseModel):
+    """Abstract base class for all agent events"""
 
+    timestamp: datetime = Field(
+        default_factory=datetime.now, description="When the event occured"
+    )
+    source: str = Field(
+        ..., description="Source of the event (agent name, system, orchestrator, etc.)"
+    )
+    event_type: str = Field(..., description="Type of event")
+
+    model_config = ConfigDict(frozen=True)
+
+
+    def __str__(self) -> str:
+        """Returns a user friendly string representation."""
+        time_str = self.timestamp.strftime("%H:%M:%S")
+        return f"[{self.source}] {time_str} | {self.event_type}"
+
+    def __repr__(self) -> str:
+        """Returns a developer friendly representation"""
+        class_name = self.__class__.__name__
+        return (
+            f"{class_name}("
+            f"event_type='{self.event_type}',"
+            f"source='{self.source}',"
+            f"timestamp='{self.timestamp}')"
+        )
+            
