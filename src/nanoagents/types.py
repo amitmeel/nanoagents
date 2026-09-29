@@ -6,7 +6,7 @@ for type safety and data validation.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Sequence, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -196,8 +196,8 @@ class ChatCompletionChunk(BaseModel):
     usage: Optional["Usage"] = Field(
         default=None,
         description=(
-            f"Token usage statistics ("
-            f"only present in final chunk when stream_options.include_usage=true)"
+            "Token usage statistics ("
+            "only present in final chunk when stream_options.include_usage=true)"
         )
     )
 
@@ -234,3 +234,183 @@ class BaseEvent(BaseModel):
             f"timestamp='{self.timestamp}')"
         )
             
+
+# Execution events
+class TaskStartEvent(BaseEvent):
+    """Event emitted when task processing begins."""
+
+    event_type: str = Field(default="task_start", description="Event type identifier")
+    task: str = Field(..., description="the task being started")
+
+
+class TaskCompleteEvent(BaseEvent):
+    """Event emitted when task processing ends."""
+
+    event_type: str = Field(default="task_complete", description="Event type identifier")
+    result: str = Field(..., description="The final task result")
+
+
+class ModelCallEvent(BaseEvent):
+    """Event emitted when LLM API call is initiated."""
+
+    event_type: str = Field(default="model_call", description="Event type identifier")
+    input_messages: Sequence[Message] = Field(
+        ..., description="Messages sent to the model"
+    )
+    model: str = Field(..., description="Model being called")
+
+
+class ModelResponseEvent(BaseEvent):
+    """Event emitted when LLM response is received."""
+
+    event_type: str = Field(default="model_response", description="Event type identifier")
+    response: str = Field(..., description="The model's response")
+    has_tool_calls: bool = Field(
+        default=False, description="Whether response contains tool calls"
+    )
+
+
+class ModelStreamChunkEvent(BaseEvent):
+    """Event emitted for each streaming chunk from LLM."""
+
+    event_type: str = Field(
+        default="model_stream_chunk", description="Event type identifier"
+    )
+    chunk: str = Field(..., description="Incremental text chunk")
+    is_final: bool = Field(default=False, description="Whether this is the final chunk")
+
+
+# Tool events
+class ToolCallEvent(BaseEvent):
+    """Event emitted when tool execution begins."""
+
+    event_type: str = Field(default="tool_call", description="Event type identifier")
+    tool_name: str = Field(..., description="Name of the tool being called")
+    parameters: Dict[str, Any] = Field(..., description="Arguments passed to the tool")
+    call_id: str = Field(..., description="Unique identifier for this tool call")
+
+    def __str__(self) -> str:
+        """Return a user friendly string representation with tool details"""
+        time_str = self.timestamp.strftime("%H:%M:%S")
+        params_str = ", ".join([f"{k}={v}" for k,v in self.parameters.items()])
+        return f"[{self.source}] {time_str}| tool_call: {self.tool_name}({params_str})"
+
+
+class ToolCallResponseEvent(BaseEvent):
+    """Event emitted when tool execution completes."""
+
+    event_type: str = Field(default="tool_call_response", description="Event type identifier")
+    call_id: str = Field(..., description="Unique dentifier for this tool call")
+    result: Optional[ToolResult] = Field(default=None, description="Tool execution result")
+
+    def __str__(self) -> str:
+        """Returns a user friendly string representation with result information."""
+        time_str = self.timestamp.strftime("%H:%M:%S")
+        if self.result:
+            status = "✓" if self.result.success else "✗"
+            result_preview = (
+                str(self.result.result)[:50] + "..."
+                if len(self.result.result) > 50 
+                else str(self.result.result)
+            )
+            return (
+                f"[{self.source}] {time_str} | tool_response: {status} {result_preview}"
+            )
+        else:
+            return f"[{self.source}] {time_str} | tool_response: (no result)"
+
+
+class ToolApprovalEvent(BaseEvent):
+    """Event emitted when tool execution requires approval."""
+
+    event_type: str = Field(
+        default="tool_approval", description="Event type identifier"
+    )
+    approval_request: "ToolApprovalRequest" = Field(
+        ..., description="The approval request details"
+    )
+
+    def __str__(self) -> str:
+        """Retruns a user friendly string representation"""
+        time_str = self.timestamp.strftime("%H:%M:%S")
+        return f"[{self.source}] {time_str} | ⚠️ approval needed: {self.approval_request.tool_name}"
+
+
+class ToolValidationEvent(BaseEvent):
+    """Event emitted after tool parameters validation."""
+
+    event_type: str = Field(
+        default="tool_validation", description="Event type identifier"
+    )
+    tool_name: str = Field(..., description="Name of the tool being validated")
+    is_valid: bool = Field(..., description="Whether parameters are valid")
+    errors: Optional[List[str]] = Field(default=None, description="Validation error messages")
+
+
+#Memory Events
+class MemoryUpdateEvent(BaseEvent):
+    """Event emitted when memory state changes."""
+
+    event_type: str = Field(
+        default="memory_update", description="Event type identifier"
+    )
+    operation: str = Field(
+        ..., description="Type of memory operation: add, update or delete"
+    )
+    content_summary: str = Field(..., description="Summary of what was stored/updated")
+
+
+class MemoryRetrievalEvent(BaseEvent):
+    """Event emitted when memory content is accessed."""
+
+    event_type: str = Field(
+        default="memory_retrieval", description="Event type identifier"
+    )
+    query: str = Field(..., description="Query used to retrieve memories")
+    results_count: int = Field(..., description="Number of memories retrieved")
+
+
+# Error Events
+class ErrorEvent(BaseEvent):
+    """Event emitted for recoverable errors that terminate execution."""
+
+    event_type: str = Field(
+        default="error", description="Event type identifier"
+    )
+    error_message: str = Field(..., description="Description of the error")
+    error_type: str = Field(..., description="Type/Category of the error")
+    is_recoverable: bool = Field(
+        default=False, description="Whether error can be reocvered from"
+    )
+
+
+class FatalErrorEvent(BaseEvent):
+    """Event emitted for unrecoverable errors that terminate execution."""
+
+    event_type: str = Field(
+        default="error", description="Event type identifier"
+    )
+    error_message: str = Field(..., description="Description of the error")
+    error_type: str = Field(..., description="Type/Category of the error")
+    is_recoverable: bool = Field(
+        default=False, description="Always False for fatal errors"
+    )
+
+
+
+# Union Type for all events
+AgentEvent = Union[
+    TaskStartEvent,
+    TaskCompleteEvent,
+    ModelCallEvent,
+    ModelResponseEvent,
+    ModelStreamChunkEvent,
+    ToolCallEvent,
+    ToolCallResponseEvent,
+    ToolValidationEvent,
+    MemoryUpdateEvent,
+    MemoryRetrievalEvent,
+    ErrorEvent,
+    FatalErrorEvent
+
+] 
