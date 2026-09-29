@@ -6,14 +6,14 @@ for type safety and data validation.
 """
 
 from datetime import datetime
-from typing import Any, Dict, List, Optional, Sequence, Union
+from typing import TYPE_CHECKING, Any, Dict, List, Optional, Sequence, Union
 
 from pydantic import BaseModel, ConfigDict, Field
 
 from .messages import Message
 
-# if TYPE_CHECKING:
-#     from .context import AgentContext, ToolApprovalRequest
+if TYPE_CHECKING:
+    from .context import AgentContext, ToolApprovalRequest
 
 
 class Usage(BaseModel):
@@ -414,3 +414,8 @@ AgentEvent = Union[
     FatalErrorEvent
 
 ] 
+
+
+# Fix forward references
+from .context import AgentContext, ToolApprovalRequest
+from .messages import AssistantMessage
