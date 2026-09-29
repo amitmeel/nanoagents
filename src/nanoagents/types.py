@@ -166,3 +166,42 @@ class AgentResponse(BaseModel):
             f"{approval_info}"
             ")"
         )
+
+class ChatCompletionResult(BaseModel):
+    """Standardized LLM response from BaseChatCompletionClient."""
+
+    message: "AssistantMessage" = Field(..., description="The LLM response")
+    usage: Usage = Field(..., description="Token COnsumption and timing metrics")
+    model: str = Field(..., description="Actual Model used for the request")
+    finish_reason: str = Field(
+        ..., description="Completion status: stop, tool_calls, length, error"
+    )
+    structured_output: Optional[BaseModel] = Field(
+        default=None,
+        description="Parsed structured output when output_format is specified"
+    )
+
+    model_config = ConfigDict(frozen=True)
+
+
+class ChatCompletionChunk(BaseModel):
+    """Streaming chunk response from BaseChatCompletionClient."""
+
+    content: str = Field(..., description="Partial text content from stream")
+    is_complete: bool = Field(..., decription="whether this is the final chunk")
+    tool_call_chunk: Optional[Dict[str, Any]] = Field(
+        default=None,
+        description="Partial tool call data"
+    )
+    usage: Optional["Usage"] = Field(
+        default=None,
+        description=(
+            f"Token usage statistics ("
+            f"only present in final chunk when stream_options.include_usage=true)"
+        )
+    )
+
+    model_config =ConfigDict(frozen=True)
+
+
+
