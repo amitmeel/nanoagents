@@ -31,16 +31,17 @@ if TYPE_CHECKING:
 class MiddlewareContext(BaseModel):
     """Context passed through middleware chain."""
 
-operation: str = Field(
-    description="Operation Type: model_call, tool_call, memory_access"
-)
-agent_name: str = Field(description="Name of the agent executing the operation")
-data: Any = Field(
-    description="Operation-Specific data (messages, tool request, etc)"
-)
-metadata: Dict[str, Any] = Field(
-    default_factory=dict, description="Additional metadata for middleware use"
-)
+    operation: str = Field(
+        description="Operation Type: model_call, tool_call, memory_access"
+    )
+    agent_name: str = Field(description="Name of the agent executing the operation")
+    agent_context: AgentContext = Field(description="The agent's context")
+    data: Any = Field(
+        description="Operation-Specific data (messages, tool request, etc)"
+    )
+    metadata: Dict[str, Any] = Field(
+        default_factory=dict, description="Additional metadata for middleware use"
+    )
 
 
 class BaseMiddleware(ABC):
@@ -58,7 +59,7 @@ class BaseMiddleware(ABC):
 
     @abstractmethod
     async def process_request(
-        self, context: AgentContext
+        self, context: MiddlewareContext
     ) -> AsyncGenerator[Union[MiddlewareContext, "AgentEvent"], None]:
         """
         Process before the operation executes
@@ -95,7 +96,7 @@ class BaseMiddleware(ABC):
 
     @abstractmethod
     async def process_response(
-        self, context: AgentContext, result: Any
+        self, context: MiddlewareContext, result: Any
     ) -> AsyncGenerator[Union[Any, "AgentEvent"], None]:
         """
         Process after the operation complete successfully.
@@ -480,4 +481,240 @@ class MiddlewareChain:
 
         # Yield final result
         yield result
+
+
+# Example Middleware implemenations
+
+
+class LoggingMiddleware(BaseMiddleware):
+    """Log all agent operations."""
+
+    def __init__(self, logger: Optional[logging.Logger] = None):
+        self.logger = logger or logging.getLogger(__name__)
+
+    async def process_request(
+            self, context: MiddlewareContext
+    ) -> AsyncGenerator[Union[MiddlewareContext, "AgentEvent"], None]:
+        """Log operation start."""
+        self.logger.info(
+            f"[{context.agent_name}] Starting {context.operation}",
+            extra={
+                "agent": context.agent_name,
+                "operation": context.operation,
+                "session_id": context.agent_context.session_id
+            }
+        )
+        context.metadata["start_time"] = time.time()
+        yield context
+
+    async def process_response(
+            self, context: MiddlewareContext, result: Any
+    ) -> AsyncGenerator[Union[Any, "AgentEvent"], None]:
+        """Log operation completion."""
+        duration = time.time() - context.metadata.get("start_time", 0)
+        self.logger.info(
+            f"[{context.agent_name}] Completed {context.operation} in {duration:.2f}s",
+            extra={
+                "agent": context.agent_name,
+                "operation": context.operation,
+                "duration": duration,
+                "session_id": context.agent_context.session_id
+            }
+        )
+        yield result
+
+    async def process_error(
+            self, context: MiddlewareContext, error: Exception
+    ) -> AsyncGenerator[Union[Any, "AgentEvent"], None]:
+        """Log operation error."""
+        self.logger.error(
+            f"[{context.agent_name}] Error in {context.operation}: {error}",
+            extra={
+                "agent": context.agent_name,
+                "operation": context.operation,
+                "error_type": type(error).__name__,
+                "session_id": context.agent_context.session_id,
+            },
+        )
+        if False:  # Type checker hint
+            yield
+        raise error
+
+
+class RateLimitMiddleware(BaseMiddleware):
+    """Rate limit operations per agent."""
+
+    def __init__(self, max_calls_per_minute:int = 60):
+        """Initialize rate limiter.
+        
+        Args:
+            max_calls_per_minute: Maximum operations allowed per minute    
+        """
+        self.max_calls = max_calls_per_minute
+        self.call_times: List[float] = []  # Stateful tracking of call times
+
+    async def process_request(
+            self, context: MiddlewareContext
+    ) -> AsyncGenerator[Union[MiddlewareContext, "AgentEvent"], None]:
+        """Check and enforce rate limit."""
+        now = time.time()
+
+        # Remove calls outside the 60s window
+        self.call_times = [t for t in self.call_times if now - t < 60]
+
+        # Check if we've hit the limit
+        if len(self.call_times) >= self.max_calls:
+            # Calculate how long to wait
+            oldest_call = self.call_times[0]
+            wait_time = 60 - (now - oldest_call)
+            if wait_time > - 0:
+                await asyncio.sleep(wait_time)
+                now = time.time()
+
+        # Record this call
+        self.call_times.append(now)
+        yield context
+
+    async def process_response(
+            self, context: MiddlewareContext, result: Any
+    ) -> AsyncGenerator[Union[Any, "AgentEvent"], None]:
+        """No response processing needed."""
+        yield result
+
+    async def process_error(
+            self, context: MiddlewareContext, error: Exception
+    ) -> AsyncGenerator[Union[Any, "AgentEvent"], None]:
+        """No error recovery."""
+        if False: # Type checker hint
+            yield
+        raise error
+
+
+class GuardrailMiddleware(BaseMiddleware):
+    """Enforces safety guardrails on operations."""
+
+    def __init__(
+        self,
+        blocked_tools: Optional[List[str]] = None,
+        blocked_patterns: Optional[List[str]] = None,
+    ):
+        """
+        Initialize guardrails.
+
+        Args:
+            blocked_tools: List of tool names to block
+            blocked_patterns: List of regex patterns to block in content
+        """
+        self.blocked_tools = blocked_tools or []
+        self.blocked_patterns = [re.compile(p) for p in (blocked_patterns or [])]
+
+    async def process_request(
+        self, context: MiddlewareContext
+    ) -> AsyncGenerator[Union[MiddlewareContext, "AgentEvent"], None]:
+        """Check for policy violations."""
+        if context.operation == "tool_call":
+            # Block dangerous tools
+            tool_name = getattr(context.data, "tool_name", None)
+            if tool_name in self.blocked_tools:
+                raise ValueError(f"Tool '{tool_name}' is blocked by guardrails")
+
+            # Check parameters for dangerous patterns
+            params = getattr(context.data, "parameters", {})
+            params_str = str(params)
+            for pattern in self.blocked_patterns:
+                if pattern.search(params_str):
+                    raise ValueError(
+                        f"Tool parameters match blocked pattern: {pattern.pattern}"
+                    )
+
+        elif context.operation == "model_call":
+            # Check messages for blocked patterns
+            for msg in context.data:
+                if hasattr(msg, "content"):
+                    for pattern in self.blocked_patterns:
+                        if pattern.search(msg.content):
+                            raise ValueError(
+                                f"Message contains blocked pattern: {pattern.pattern}"
+                            )
+
+        yield context
+
+    async def process_response(
+        self, context: MiddlewareContext, result: Any
+    ) -> AsyncGenerator[Union[Any, "AgentEvent"], None]:
+        """No response processing."""
+        yield result
+
+    async def process_error(
+        self, context: MiddlewareContext, error: Exception
+    ) -> AsyncGenerator[Union[Any, "AgentEvent"], None]:
+        """No error recovery."""
+        if False:  # Type checker hint
+            yield
+        raise error
+
+
+class MetricsMiddleware(BaseMiddleware):
+    """Collects metrics about agent operations."""
+
+    def __init__(self):
+        """Initialize metrics collector."""
+        self.metrics = {
+            "total_operations": 0,
+            "operations_by_type": {},
+            "errors_by_type": {},
+            "total_duration": 0.0,
+            "operation_durations": [],
+        }
+
+    async def process_request(
+        self, context: MiddlewareContext
+    ) -> AsyncGenerator[Union[MiddlewareContext, "AgentEvent"], None]:
+        """Track operation start."""
+        self.metrics["total_operations"] += 1
+        self.metrics["operations_by_type"][context.operation] = (
+            self.metrics["operations_by_type"].get(context.operation, 0) + 1
+        )
+        context.metadata["metrics_start_time"] = time.time()
+        yield context
+
+    async def process_response(
+        self, context: MiddlewareContext, result: Any
+    ) -> AsyncGenerator[Union[Any, "AgentEvent"], None]:
+        """Track operation completion."""
+        duration = time.time() - context.metadata.get("metrics_start_time", 0)
+        self.metrics["total_duration"] += duration
+        self.metrics["operation_durations"].append((context.operation, duration))
+
+        # Keep only last 100 durations to avoid memory issues
+        if len(self.metrics["operation_durations"]) > 100:
+            self.metrics["operation_durations"] = self.metrics["operation_durations"][
+                -100:
+            ]
+
+        yield result
+
+    async def process_error(
+        self, context: MiddlewareContext, error: Exception
+    ) -> AsyncGenerator[Union[Any, "AgentEvent"], None]:
+        """Track operation errors."""
+        error_type = type(error).__name__
+        self.metrics["errors_by_type"][error_type] = (
+            self.metrics["errors_by_type"].get(error_type, 0) + 1
+        )
+        if False:  # Type checker hint
+            yield
+        raise error
+
+    def get_metrics(self) -> Dict[str, Any]:
+        """Get current metrics."""
+        avg_duration = (
+            self.metrics["total_duration"] / self.metrics["total_operations"]
+            if self.metrics["total_operations"] > 0
+            else 0
+        )
+        return {
+            **self.metrics,
+            "average_duration": avg_duration,
+        }
 
