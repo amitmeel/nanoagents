@@ -70,7 +70,7 @@ class BaseMiddleware(ABC):
 
         To pause execution for approval:
             ```python
-            yiled ToolApprovalEvent(approval_request=req)
+            yield ToolApprovalEvent(approval_request=req)
             return # Don't yield context - agent will pause
             ```
 
