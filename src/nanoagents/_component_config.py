@@ -14,9 +14,8 @@ import importlib
 import warnings
 from typing import Any, ClassVar, Dict, Generic, Literal, Type, Union, cast, overload
 
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 from typing_extensions import Self, TypeGuard, TypeVar
-
 
 ComponentType = Union[
     Literal[
@@ -216,8 +215,8 @@ class ComponentToConfig(Generic[ToConfigT]):
             if '_.' in provider:
                 warnings.warn(
                     (
-                    f"Internal module name used in prpovider string. This is not recommended and may cause "
-                    f"issues in the future. Silence this warning by setting component_provider_override to this value."
+                    "Internal module name used in prpovider string. This is not recommended and may cause "
+                    "issues in the future. Silence this warning by setting component_provider_override to this value."
                     ),
                     stacklevel=2
                 )

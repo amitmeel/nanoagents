@@ -35,7 +35,6 @@ from typing import Any, Dict, List, Optional
 from .context import AgentContext
 from .messages import Message
 
-
 # ==================================================================================
 # Loop Context
 # ==================================================================================
@@ -468,7 +467,8 @@ class LLMCompletionHook(BaseEndHook):
         summary = self._build_conversation_summary(context.llm_messages)
 
         # Ask the judge model
-        from .messages import UserMessage as UM, SystemMessage as SM
+        from .messages import SystemMessage as SM
+        from .messages import UserMessage as UM
 
         judge_messages = [
             SM(

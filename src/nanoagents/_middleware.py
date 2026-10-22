@@ -22,7 +22,6 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 from pydantic import BaseModel, Field
 
 from .context import AgentContext
-from .messages import Message
 
 if TYPE_CHECKING:
     from .types import AgentEvent
