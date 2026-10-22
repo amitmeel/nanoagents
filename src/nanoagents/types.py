@@ -24,25 +24,18 @@ class Usage(BaseModel):
     tokens_input: int = Field(default=0, description="Total input tokens consumed")
     tokens_output: int = Field(default=0, description="Total output tokens generated")
     tool_calls: int = Field(default=0, description="Number of tool executions")
-    memory_operations: int = Field(
-        default=0, description="Number of memory read/write operations"
-    )
-    cost_estimate: Optional[float] = Field(
-        default=None, description="Estimated cost in USD"
-    )
+    memory_operations: int = Field(default=0, description="Number of memory read/write operations")
+    cost_estimate: Optional[float] = Field(default=None, description="Estimated cost in USD")
 
     def __add__(self, other: "Usage") -> "Usage":
         """Aggregate usage statistics from multiple sources."""
         return Usage(
-            duration_ms=max(
-                self.duration_ms, other.duration_ms
-            ),  # Max for parellel execution
+            duration_ms=max(self.duration_ms, other.duration_ms),  # Max for parellel execution
             llm_calls=self.llm_calls + other.llm_calls,
             tokens_input=self.tokens_input + other.tokens_input,
             tool_calls=self.tool_calls + other.tool_calls,
             memory_operations=self.memory_operations + other.memory_operations,
-            cost_estimate=(self.cost_estimate or 0) + (other.cost_estimate or 0)
-            or None,
+            cost_estimate=(self.cost_estimate or 0) + (other.cost_estimate or 0) or None,
         )
 
     model_config = ConfigDict(frozen=True)
@@ -53,12 +46,8 @@ class ToolResult(BaseModel):
 
     success: bool = Field(..., description="Whether tool execution succeeded")
     result: str = Field(..., description="The actual result data")
-    error: Optional[str] = Field(
-        default=None, description="Error message if tool execution failed"
-    )
-    metadata: Dict[str, Any] = Field(
-        default_factory=dict, description="Execution time, etc."
-    )
+    error: Optional[str] = Field(default=None, description="Error message if tool execution failed")
+    metadata: Dict[str, Any] = Field(default_factory=dict, description="Execution time, etc.")
 
     model_config = ConfigDict(frozen=True)
 
@@ -70,9 +59,7 @@ class AgentResponse(BaseModel):
         default=None, description="Complete context with messages and state"
     )
     source: str = Field(..., description="Source agent that generated this response")
-    usage: Usage = Field(
-        ..., description="Execution statistics and resource consumtion"
-    )
+    usage: Usage = Field(..., description="Execution statistics and resource consumtion")
     timestamp: datetime = Field(
         default_factory=datetime.now, description="When the Message was created"
     )
@@ -131,11 +118,7 @@ class AgentResponse(BaseModel):
         )
 
         # Format cost if available
-        cost_str = (
-            f", cost: ${self.usage.cost_estimate:.4f}"
-            if self.usage.cost_estimate
-            else ""
-        )
+        cost_str = f", cost: ${self.usage.cost_estimate:.4f}" if self.usage.cost_estimate else ""
 
         # Add approval status if needed
         if self.needs_approval:
@@ -153,9 +136,7 @@ class AgentResponse(BaseModel):
     def __repr__(self) -> str:
         """Returns an unambiguous, developer friendly representation."""
         approval_info = (
-            f", approvals_needed={len(self.approval_requests)}"
-            if self.needs_approval
-            else ""
+            f", approvals_needed={len(self.approval_requests)}" if self.needs_approval else ""
         )
         return (
             f"AgentResponse("
@@ -167,6 +148,7 @@ class AgentResponse(BaseModel):
             ")"
         )
 
+
 class ChatCompletionResult(BaseModel):
     """Standardized LLM response from BaseChatCompletionClient."""
 
@@ -177,8 +159,7 @@ class ChatCompletionResult(BaseModel):
         ..., description="Completion status: stop, tool_calls, length, error"
     )
     structured_output: Optional[BaseModel] = Field(
-        default=None,
-        description="Parsed structured output when output_format is specified"
+        default=None, description="Parsed structured output when output_format is specified"
     )
 
     model_config = ConfigDict(frozen=True)
@@ -190,34 +171,30 @@ class ChatCompletionChunk(BaseModel):
     content: str = Field(..., description="Partial text content from stream")
     is_complete: bool = Field(..., decription="whether this is the final chunk")
     tool_call_chunk: Optional[Dict[str, Any]] = Field(
-        default=None,
-        description="Partial tool call data"
+        default=None, description="Partial tool call data"
     )
     usage: Optional["Usage"] = Field(
         default=None,
         description=(
             "Token usage statistics ("
             "only present in final chunk when stream_options.include_usage=true)"
-        )
+        ),
     )
 
-    model_config =ConfigDict(frozen=True)
+    model_config = ConfigDict(frozen=True)
 
 
 # Base event class for Streaming
 class BaseEvent(BaseModel):
     """Abstract base class for all agent events"""
 
-    timestamp: datetime = Field(
-        default_factory=datetime.now, description="When the event occured"
-    )
+    timestamp: datetime = Field(default_factory=datetime.now, description="When the event occured")
     source: str = Field(
         ..., description="Source of the event (agent name, system, orchestrator, etc.)"
     )
     event_type: str = Field(..., description="Type of event")
 
     model_config = ConfigDict(frozen=True)
-
 
     def __str__(self) -> str:
         """Returns a user friendly string representation."""
@@ -233,7 +210,7 @@ class BaseEvent(BaseModel):
             f"source='{self.source}',"
             f"timestamp='{self.timestamp}')"
         )
-            
+
 
 # Execution events
 class TaskStartEvent(BaseEvent):
@@ -254,9 +231,7 @@ class ModelCallEvent(BaseEvent):
     """Event emitted when LLM API call is initiated."""
 
     event_type: str = Field(default="model_call", description="Event type identifier")
-    input_messages: Sequence[Message] = Field(
-        ..., description="Messages sent to the model"
-    )
+    input_messages: Sequence[Message] = Field(..., description="Messages sent to the model")
     model: str = Field(..., description="Model being called")
 
 
@@ -265,17 +240,13 @@ class ModelResponseEvent(BaseEvent):
 
     event_type: str = Field(default="model_response", description="Event type identifier")
     response: str = Field(..., description="The model's response")
-    has_tool_calls: bool = Field(
-        default=False, description="Whether response contains tool calls"
-    )
+    has_tool_calls: bool = Field(default=False, description="Whether response contains tool calls")
 
 
 class ModelStreamChunkEvent(BaseEvent):
     """Event emitted for each streaming chunk from LLM."""
 
-    event_type: str = Field(
-        default="model_stream_chunk", description="Event type identifier"
-    )
+    event_type: str = Field(default="model_stream_chunk", description="Event type identifier")
     chunk: str = Field(..., description="Incremental text chunk")
     is_final: bool = Field(default=False, description="Whether this is the final chunk")
 
@@ -292,7 +263,7 @@ class ToolCallEvent(BaseEvent):
     def __str__(self) -> str:
         """Return a user friendly string representation with tool details"""
         time_str = self.timestamp.strftime("%H:%M:%S")
-        params_str = ", ".join([f"{k}={v}" for k,v in self.parameters.items()])
+        params_str = ", ".join([f"{k}={v}" for k, v in self.parameters.items()])
         return f"[{self.source}] {time_str}| tool_call: {self.tool_name}({params_str})"
 
 
@@ -310,12 +281,10 @@ class ToolCallResponseEvent(BaseEvent):
             status = "✓" if self.result.success else "✗"
             result_preview = (
                 str(self.result.result)[:50] + "..."
-                if len(self.result.result) > 50 
+                if len(self.result.result) > 50
                 else str(self.result.result)
             )
-            return (
-                f"[{self.source}] {time_str} | tool_response: {status} {result_preview}"
-            )
+            return f"[{self.source}] {time_str} | tool_response: {status} {result_preview}"
         else:
             return f"[{self.source}] {time_str} | tool_response: (no result)"
 
@@ -323,12 +292,8 @@ class ToolCallResponseEvent(BaseEvent):
 class ToolApprovalEvent(BaseEvent):
     """Event emitted when tool execution requires approval."""
 
-    event_type: str = Field(
-        default="tool_approval", description="Event type identifier"
-    )
-    approval_request: "ToolApprovalRequest" = Field(
-        ..., description="The approval request details"
-    )
+    event_type: str = Field(default="tool_approval", description="Event type identifier")
+    approval_request: "ToolApprovalRequest" = Field(..., description="The approval request details")
 
     def __str__(self) -> str:
         """Retruns a user friendly string representation"""
@@ -339,33 +304,25 @@ class ToolApprovalEvent(BaseEvent):
 class ToolValidationEvent(BaseEvent):
     """Event emitted after tool parameters validation."""
 
-    event_type: str = Field(
-        default="tool_validation", description="Event type identifier"
-    )
+    event_type: str = Field(default="tool_validation", description="Event type identifier")
     tool_name: str = Field(..., description="Name of the tool being validated")
     is_valid: bool = Field(..., description="Whether parameters are valid")
     errors: Optional[List[str]] = Field(default=None, description="Validation error messages")
 
 
-#Memory Events
+# Memory Events
 class MemoryUpdateEvent(BaseEvent):
     """Event emitted when memory state changes."""
 
-    event_type: str = Field(
-        default="memory_update", description="Event type identifier"
-    )
-    operation: str = Field(
-        ..., description="Type of memory operation: add, update or delete"
-    )
+    event_type: str = Field(default="memory_update", description="Event type identifier")
+    operation: str = Field(..., description="Type of memory operation: add, update or delete")
     content_summary: str = Field(..., description="Summary of what was stored/updated")
 
 
 class MemoryRetrievalEvent(BaseEvent):
     """Event emitted when memory content is accessed."""
 
-    event_type: str = Field(
-        default="memory_retrieval", description="Event type identifier"
-    )
+    event_type: str = Field(default="memory_retrieval", description="Event type identifier")
     query: str = Field(..., description="Query used to retrieve memories")
     results_count: int = Field(..., description="Number of memories retrieved")
 
@@ -374,28 +331,19 @@ class MemoryRetrievalEvent(BaseEvent):
 class ErrorEvent(BaseEvent):
     """Event emitted for recoverable errors that terminate execution."""
 
-    event_type: str = Field(
-        default="error", description="Event type identifier"
-    )
+    event_type: str = Field(default="error", description="Event type identifier")
     error_message: str = Field(..., description="Description of the error")
     error_type: str = Field(..., description="Type/Category of the error")
-    is_recoverable: bool = Field(
-        default=False, description="Whether error can be reocvered from"
-    )
+    is_recoverable: bool = Field(default=False, description="Whether error can be reocvered from")
 
 
 class FatalErrorEvent(BaseEvent):
     """Event emitted for unrecoverable errors that terminate execution."""
 
-    event_type: str = Field(
-        default="error", description="Event type identifier"
-    )
+    event_type: str = Field(default="error", description="Event type identifier")
     error_message: str = Field(..., description="Description of the error")
     error_type: str = Field(..., description="Type/Category of the error")
-    is_recoverable: bool = Field(
-        default=False, description="Always False for fatal errors"
-    )
-
+    is_recoverable: bool = Field(default=False, description="Always False for fatal errors")
 
 
 # Union Type for all events
@@ -411,9 +359,8 @@ AgentEvent = Union[
     MemoryUpdateEvent,
     MemoryRetrievalEvent,
     ErrorEvent,
-    FatalErrorEvent
-
-] 
+    FatalErrorEvent,
+]
 
 
 # Fix forward references

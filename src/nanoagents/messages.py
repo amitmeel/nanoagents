@@ -16,9 +16,7 @@ if TYPE_CHECKING:
 
 class BaseMessage(BaseModel):
     content: str = Field(..., description="The message content")
-    source: str = Field(
-        ..., description="Source of the message (agent name, system, user, etc.)"
-    )
+    source: str = Field(..., description="Source of the message (agent name, system, user, etc.)")
     timestamp: datetime = Field(
         default_factory=datetime.now, description="When the message was created"
     )
@@ -72,9 +70,7 @@ class AssistantMessage(BaseMessage):
     structured_content: Optional[BaseModel] = Field(
         default=None, description="Strucutred data when output_format is used."
     )
-    usage: Optional["Usage"] = Field(
-        default=None, description="Token usage for this LLM call."
-    )
+    usage: Optional["Usage"] = Field(default=None, description="Token usage for this LLM call.")
 
     def __str__(self) -> str:
         """Returns a user friendly string representation."""
@@ -84,18 +80,12 @@ class AssistantMessage(BaseMessage):
             # Show tool calls information
             tool_info = ", ".join(
                 [
-                    (
-                        f"{tc.tool_name}("
-                        f"{', '.join(f'{k}={v}' for k, v in tc.parameters.items())}"
-                        ")"
-                    )
+                    (f"{tc.tool_name}({', '.join(f'{k}={v}' for k, v in tc.parameters.items())})")
                     for tc in self.tool_calls
                 ]
             )
             if self.content and self.content.strip():
-                return (
-                    f"[{self.source}] {time_str} | {self.content} [tools: {tool_info}]"
-                )
+                return f"[{self.source}] {time_str} | {self.content} [tools: {tool_info}]"
             else:
                 return f"[{self.source}] {time_str} | [calling tools: {tool_info}]"
         else:
@@ -106,9 +96,7 @@ class ToolMessage(BaseMessage):
     """Tool message containing result from tool execution."""
 
     role: Literal["tool"] = Field(default="tool", description="Message role")
-    tool_call_id: str = Field(
-        ..., description="ID of the tool call this is responding to"
-    )
+    tool_call_id: str = Field(..., description="ID of the tool call this is responding to")
     tool_name: str = Field(..., description="Name of the tool that was executed")
     success: bool = Field(..., description="Whether tool execution succeeded")
     error: Optional[str] = Field(default=None, description="Error message if failed")
@@ -182,6 +170,4 @@ class MultiModalMessage(BaseMessage):
 
 
 # Union type for all message types
-Message = Union[
-    SystemMessage, AssistantMessage, UserMessage, ToolMessage, MultiModalMessage
-]
+Message = Union[SystemMessage, AssistantMessage, UserMessage, ToolMessage, MultiModalMessage]

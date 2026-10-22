@@ -18,9 +18,7 @@ from pydantic import BaseModel
 from typing_extensions import Self, TypeGuard, TypeVar
 
 ComponentType = Union[
-    Literal[
-        "model", "agent", "tool", "termination", "orchestrator", "step", "workflow"
-    ], str
+    Literal["model", "agent", "tool", "termination", "orchestrator", "step", "workflow"], str
 ]
 ConfigT = TypeVar("ConfigT", bound=BaseModel)
 FromConfigT = TypeVar("FromConfigT", bound=BaseModel, contravariant=True)
@@ -95,7 +93,7 @@ WELL_KNOWN_PROVIDERS = {
     # nanoagents model clients
     "openai_chat_completion_client": "nanoagents.llm.OpenAIChatCompletionClient",
     "OpenAIChatCompletionClient": "nanoagents.llm.OpenAIChatCompletionClient",
-    "model_client": "nanoagents.llm.OpenAIChatCompletionClient", # Default model client
+    "model_client": "nanoagents.llm.OpenAIChatCompletionClient",  # Default model client
     # nanoagents Agents
     "agent": "nanoagents.agents.Agent",
     "Agent": "nanoagents.agents.Agent",
@@ -104,7 +102,7 @@ WELL_KNOWN_PROVIDERS = {
     "ListMemory": "nanoagents.memory.ListMemory",
     "file_memory": "nanoagents.memory.FileMemory",
     "FileMemory": "nanoagents.memory.FileMemory",
-    "Memory": "nanoagents.memory.ListMemory", # Default memory
+    "Memory": "nanoagents.memory.ListMemory",  # Default memory
     # nanoagents termination
     "max_message_termination": "nanoagents.termination.MaxMessageTermination",
     "MaxMessageTermination": "nanoagents.termination.MaxMessageTermination",
@@ -131,7 +129,7 @@ class ComponentFromConfig(Generic[FromConfigT]):
     """
     Mixin class for components that can be loaded from configuration.
 
-    Implement this interface to enable your component to be instantiated 
+    Implement this interface to enable your component to be instantiated
     from a serialized configuration object.
     """
 
@@ -164,9 +162,7 @@ class ComponentFromConfig(Generic[FromConfigT]):
 
         :meta public:
         """
-        raise NotImplementedError(
-            "This component does not support loading from past versions"
-        )
+        raise NotImplementedError("This component does not support loading from past versions")
 
 
 class ComponentToConfig(Generic[ToConfigT]):
@@ -181,29 +177,29 @@ class ComponentToConfig(Generic[ToConfigT]):
     """The logical type of the component."""
     component_version: ClassVar[int] = 1
     """The version of the component, if schema incompatibilities are introduced this should be updated."""
-    component_provider_override: ClassVar[str|None] = None
+    component_provider_override: ClassVar[str | None] = None
     """Override the provider string for the component. This should be used to prevent internal module names being a part of the module name."""
-    component_description: ClassVar[str|None] = None
+    component_description: ClassVar[str | None] = None
     """A description of the component. If not provided, the docstring of the class will be used."""
-    component_label: ClassVar[str|None] = None
+    component_label: ClassVar[str | None] = None
     """A human readable label for the component. If not provided, the component class name will be used."""
 
     def _to_config(self) -> ToConfigT:
         """Dump the configuration that would be require to create a new instance of a component matching the configuration of this instance.
-        
+
         Returns:
             T: The configuration of the component.
-            
+
         :meta public:
         """
         raise NotImplementedError("This component does not suppport dumping to config")
 
     def dump_component(self) -> ComponentModel:
         """Dump the component to a model that can be loaded back in.
-        
+
         Raises:
             TypeError: If he component is a local class.
-        
+
         Returns:
             ComponentModel: The model representing the component
         """
@@ -212,13 +208,13 @@ class ComponentToConfig(Generic[ToConfigT]):
         else:
             provider = _type_to_provider_str(self.__class__)
             # warn if internal module name is used
-            if '_.' in provider:
+            if "_." in provider:
                 warnings.warn(
                     (
-                    "Internal module name used in prpovider string. This is not recommended and may cause "
-                    "issues in the future. Silence this warning by setting component_provider_override to this value."
+                        "Internal module name used in prpovider string. This is not recommended and may cause "
+                        "issues in the future. Silence this warning by setting component_provider_override to this value."
                     ),
-                    stacklevel=2
+                    stacklevel=2,
                 )
 
         if "<locals>" in provider:
@@ -256,15 +252,13 @@ class ComponentLoader:
     @classmethod
     def load_component(
         cls, model: ComponentModel | Dict[str, Any], expected: None = None
-    ) -> Self:
-        ...
+    ) -> Self: ...
 
     @overload
     @classmethod
     def load_component(
         cls, model: ComponentModel | Dict[str, Any], expected: Type[ExpectedType]
-    ) -> ExpectedType:
-        ...
+    ) -> ExpectedType: ...
 
     @classmethod
     def load_component(
@@ -311,7 +305,7 @@ class ComponentLoader:
             loaded_model = model
 
         # First, do a look up in well known providers
-        if  loaded_model.provider in WELL_KNOWN_PROVIDERS:
+        if loaded_model.provider in WELL_KNOWN_PROVIDERS:
             loaded_model.provider = WELL_KNOWN_PROVIDERS[loaded_model.provider]
 
         output = loaded_model.provider.rsplit(".", maxsplit=1)
@@ -332,12 +326,12 @@ class ComponentLoader:
         if not hasattr(component_class, "component_type"):
             raise AttributeError("component_type not defined")
 
-        loaded_config_version = (
-            loaded_model.component_version or component_class.component_version
-        )
+        loaded_config_version = loaded_model.component_version or component_class.component_version
         if loaded_config_version < component_class.component_version:
             try:
-                instance = component_class._from_config_past_version(loaded_model.config, loaded_config_version)  # type: ignore
+                instance = component_class._from_config_past_version(
+                    loaded_model.config, loaded_config_version
+                )  # type: ignore
             except NotImplementedError as e:
                 raise NotImplementedError(
                     f"Tried to load component {component_class} which is on version {component_class.component_version} with a config on version {loaded_config_version} but _from_config_past_version is not implemented"
@@ -379,8 +373,7 @@ class ComponentSchemaType(Generic[ConfigT]):
                     )
 
 
-class ComponentBase(ComponentToConfig[ConfigT], ComponentLoader, Generic[ConfigT]):
-    ...
+class ComponentBase(ComponentToConfig[ConfigT], ComponentLoader, Generic[ConfigT]): ...
 
 
 class Component(
@@ -446,8 +439,7 @@ class _ConcreteComponent(
     ComponentToConfig[ConfigT],
     ComponentLoader,
     Generic[ConfigT],
-):
-    ...
+): ...
 
 
 def is_component_instance(cls: Any) -> TypeGuard[_ConcreteComponent[BaseModel]]:
@@ -466,7 +458,3 @@ def is_component_class(cls: type) -> TypeGuard[Type[_ConcreteComponent[BaseModel
         and issubclass(cls, ComponentSchemaType)
         and issubclass(cls, ComponentLoader)
     )
-
-
-
-

@@ -31,13 +31,13 @@ class ToolApprovalRequest(BaseModel):
     parameters: Dict[str, Any] = Field(..., "Tool Parameters")
     original_tool_call: ToolCallRequest = Field(..., description="Original tool call object")
 
-    def create_response(self, approved: bool, reason: Optional[str]=None) -> ToolApprovalResponse:
+    def create_response(self, approved: bool, reason: Optional[str] = None) -> ToolApprovalResponse:
         """Create an approval response."""
         return ToolApprovalResponse(
             request_id=self.request_id,
             tool_call_id=self.tool_call_id,
             approved=approved,
-            reason=reason
+            reason=reason,
         )
 
 
@@ -45,27 +45,23 @@ class AgentContext(BaseModel):
     """
     Unified context object for agents.
 
-    This replaces the simple message history list with a structured context 
+    This replaces the simple message history list with a structured context
     that can carry messages, metadata, shared state, and environment info.
     """
 
-    messages: List[Message] = Field(
-        default_factory=list, description="Conversation history"
-    )
+    messages: List[Message] = Field(default_factory=list, description="Conversation history")
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="State shared across agents in orchestration"
     )
     environment: Dict[str, Any] = Field(
-        default_factory=dict,  description="Environment variables and configuration" 
+        default_factory=dict, description="Environment variables and configuration"
     )
-    session_id: Optional[str] = Field(
-        default=None, description="Unique session identifier"
-    )
+    session_id: Optional[str] = Field(default=None, description="Unique session identifier")
     created_at: datetime = Field(
         default_factory=datetime.now, description="context creation timestamp"
     )
 
-    #Approval related fields
+    # Approval related fields
     pending_approval_requests: List[ToolApprovalRequest] = Field(
         default_factory=list, description="Pending tool approval requests"
     )
@@ -121,7 +117,7 @@ class AgentContext(BaseModel):
 
     @classmethod
     def from_message(cls, messages: List[Message]) -> "AgentContext":
-        """Create context from a list of messages """
+        """Create context from a list of messages"""
         return cls(messages=messages)
 
     @property
@@ -130,7 +126,7 @@ class AgentContext(BaseModel):
         return len(self.pending_approval_requests) > 0
 
     def add_approval_request(
-            self, tool_call: ToolCallRequest, tool_name: str
+        self, tool_call: ToolCallRequest, tool_name: str
     ) -> ToolApprovalRequest:
         """Create and add an approval request for a tool call."""
         request = ToolApprovalRequest(
@@ -138,7 +134,7 @@ class AgentContext(BaseModel):
             tool_call_id=tool_call.call_id,
             tool_name=tool_name,
             parameters=tool_call.parameters,
-            original_tool_call=tool_call, 
+            original_tool_call=tool_call,
         )
         self.pending_approval_requests.append(request)
         self.pending_tool_calls[tool_call.call_id] = tool_call
@@ -195,5 +191,11 @@ class AgentContext(BaseModel):
 
     def __str__(self) -> str:
         """String representation of the context."""
-        approval_info = f", {len(self.pending_approval_requests)} pending approvals" if self.waiting_for_approval else ""
-        return f"AgentContext(messages={self.message_count}, session={self.session_id}{approval_info})"
+        approval_info = (
+            f", {len(self.pending_approval_requests)} pending approvals"
+            if self.waiting_for_approval
+            else ""
+        )
+        return (
+            f"AgentContext(messages={self.message_count}, session={self.session_id}{approval_info})"
+        )

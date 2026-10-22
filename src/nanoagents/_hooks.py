@@ -39,13 +39,14 @@ from .messages import Message
 # Loop Context
 # ==================================================================================
 
+
 @dataclass
 class LoopContext:
     """Shared state passed to hooks during a single agent run.
-    
+
     Provides hooks with access to the agent context, current messages,
     and mutable metadata for inter-hook communication.
-    
+
     Attributes:
         agent_context: The agent's working context(message, metadata)
         llm_messages: current message list being sent to the LLM
@@ -54,7 +55,8 @@ class LoopContext:
         restart_count: How many times end hooks have resumed the loop
         metadata: mutable dict for hooks to share state
         model_client: The agent's model client (for hooks that needs LLM calls)
-        """
+    """
+
     agent_context: AgentContext
     llm_messages: List[Message]
     agent_name: str
@@ -68,9 +70,10 @@ class LoopContext:
 # Termination conditions
 # ==============================================================================
 
+
 class TerminationCondition(ABC):
     """Controls when end hooks should stop restarting the agent loop.
-    
+
     Composable with | (OR) and & (AND) operators:
         # Stop after 3 restarts OR when all tood is done
         condition = MaxRestartsTermination(3) | AllTodosComplete()
@@ -113,10 +116,10 @@ class MaxRestartsTermination(TerminationCondition):
     def __repr__(self) -> str:
         return f"MaxRestartsTermination(max_restarts={self.max_restarts})"
 
-    
+
 class CompositeTermination(TerminationCondition):
     """Combines multiple termination conditions with AND/OR logic.
-    
+
     Created automatically via | and & operators on TerminationCondition.
 
     Args:
@@ -132,7 +135,7 @@ class CompositeTermination(TerminationCondition):
 
     def should_terminate(self, context: LoopContext) -> bool:
         results = [c.should_terminate for c in self.conditions]
-        return any(results) if self.mode=="any" else all(results)
+        return any(results) if self.mode == "any" else all(results)
 
     def reset(self) -> None:
         for c in self.conditions:
@@ -141,13 +144,9 @@ class CompositeTermination(TerminationCondition):
     def __or__(self, other: TerminationCondition) -> "CompositeTermination":
         if self.mode == "any":
             # Flatten: (A | B) | C = A | B | C
-            if isinstance(other, CompositeTermination) and other.mode=="any":
-                return CompositeTermination(
-                    self.conditions + other.conditions, mode="Any"
-                )
-            return CompositeTermination(
-                self.conditions + [other.conditions], mode="any"
-            )
+            if isinstance(other, CompositeTermination) and other.mode == "any":
+                return CompositeTermination(self.conditions + other.conditions, mode="Any")
+            return CompositeTermination(self.conditions + [other.conditions], mode="any")
         # self is AND mode - treat as single unit (A & B) | C
         return CompositeTermination([self, other], mode="any")
 
@@ -155,9 +154,7 @@ class CompositeTermination(TerminationCondition):
         if self.mode == "all":
             # Flatten: (A & B) & C = A & B & C
             if isinstance(other, CompositeTermination) and other.mode == "all":
-                return CompositeTermination(
-                    self.conditions + other.conditions, mode="all"
-                )
+                return CompositeTermination(self.conditions + other.conditions, mode="all")
             return CompositeTermination(self.conditions + [other], mode="all")
         # self is OR mode - treat as a single unit: (A | B) & C
         return CompositeTermination([self, other], mode="all")
@@ -171,12 +168,13 @@ class CompositeTermination(TerminationCondition):
 # Base Hook classes
 # ===================================================================================
 
+
 class BaseStartHook(ABC):
     """Base class for hooks that run before th first LLM call.
-    
+
     Return a string to inject as UserMessage, or None to do nothing.
     Multiple start hooks run in order - all injections are applied.
-    
+
     Example:
         class MyStartHook(BaseStartHook):
             async def on_start(self, context):
@@ -186,10 +184,10 @@ class BaseStartHook(ABC):
     @abstractmethod
     async def on_start(self, context: LoopContext) -> Optional[str]:
         """Called before the first llm call.
-        
+
         Args:
             context: Loop context with agent state
-        
+
         Returns:
             Text to inject as UserMessage or None for no injection.
         """
@@ -198,13 +196,13 @@ class BaseStartHook(ABC):
 
 class BaseEndHook(ABC):
     """Base class for hooks that run when the agent would stop.
-    
+
     Return a string to inject as UserMessage and RESUME the loop,
     or None to allow the agent to stop.
-    
+
     The first hook to return a non-None value wins - subsequent hooks
     are not called for that exit attempt.
-    
+
     Example:
         class MyEndHook(BaseEndHook):
             async def on_end(self, context):
@@ -233,7 +231,7 @@ class BaseEndHook(ABC):
 
 class PlanningHook(BaseStartHook):
     """Start hook that injects a planning instructions before the first LLM call.
-    
+
     Instructs the agent to analyze the task and create a structured todo
     list using todo_write tool before starting any work.
 
@@ -272,30 +270,26 @@ class PlanningHook(BaseStartHook):
 
 class CompletionCheckHook(BaseEndHook):
     """End hook that checks todo list completion before allowing the agent to stop.
-    
+
     When the agent would stop (no tool calls), this hook:
     1. Load the current todo list from file
     2. Check if all tools are marked as 'completed'
     3. If incomplete items remain AND termination allow: resumes the loop
     4. If any complete OR termination says stop: allow the agent to stop
-    
+
     Args:
         termination: Termination condition. Default to MaxRestartsTermination(2).
-        max_restarts: Shorthand for MaxRestartsTermination(N). Ignore if 
+        max_restarts: Shorthand for MaxRestartsTermination(N). Ignore if
         terminaiton is provided.
 
     Example:
         agent = Agent(
             ...,
             end_hooks=[CompletionCheckHook(max_restarts=3)]
-        )    
+        )
     """
 
-    def __init__(
-            self,
-            termination: Optional[TerminationCondition] = None,
-            max_restarts: int = 2
-    ):
+    def __init__(self, termination: Optional[TerminationCondition] = None, max_restarts: int = 2):
         if termination is not None:
             self.termination = termination
         else:
@@ -304,7 +298,7 @@ class CompletionCheckHook(BaseEndHook):
     async def on_end(self, context: LoopContext) -> Optional[str]:
         # Check termination condition first
         if self.termination.should_terminate(context):
-            return None # Allow stop
+            return None  # Allow stop
 
         # Load todo from file
         from .tools._context_tools import _load_todos
@@ -318,15 +312,14 @@ class CompletionCheckHook(BaseEndHook):
         incomplete = [t for t in todos if t.get("status") != "completed"]
 
         if not incomplete:
-            return None # All done, allow stop
+            return None  # All done, allow stop
 
         # Build resume message
         total = len(todos)
         completed = total - len(incomplete)
 
         items = "\n".join(
-            f"  - [{t.get('status', 'pending')}] {t.get('content', '')}"
-            for t in incomplete
+            f"  - [{t.get('status', 'pending')}] {t.get('content', '')}" for t in incomplete
         )
 
         return (
@@ -343,7 +336,7 @@ class CompletionCheckHook(BaseEndHook):
 
 class LLMCompletionHook(BaseEndHook):
     """End hook that uses an LLM to judge whether the task is complete.
-    
+
     When the agent would stop (no tool calls), this hook:
     1. Extracts the original task from the conversation
     2. Builds a summary of the full conversation (tool calls + results + responses)
@@ -378,6 +371,7 @@ class LLMCompletionHook(BaseEndHook):
             )],
         )
     """
+
     def __init__(
         self,
         model_client: Any = None,
@@ -390,9 +384,7 @@ class LLMCompletionHook(BaseEndHook):
         else:
             self.termination = MaxRestartsTermination(max_restarts)
 
-    def _build_conversation_summary(
-        self, messages: List[Message], max_chars: int = 6000
-    ) -> str:
+    def _build_conversation_summary(self, messages: List[Message], max_chars: int = 6000) -> str:
         """Build a condensed summary of the full conversation.
 
         Includes tool calls with parameter AND result summaries,
@@ -523,9 +515,4 @@ class LLMCompletionHook(BaseEndHook):
             return None
 
     def __repr__(self) -> str:
-        return (
-            f"LLMCompletionCheckHook("
-            f"termination={self.termination!r})"
-        )
-
-        
+        return f"LLMCompletionCheckHook(termination={self.termination!r})"

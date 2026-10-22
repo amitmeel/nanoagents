@@ -10,7 +10,6 @@ Middleware uses async generaors to support:
 - Error recovery
 """
 
-
 import asyncio
 import logging
 import re
@@ -30,14 +29,10 @@ if TYPE_CHECKING:
 class MiddlewareContext(BaseModel):
     """Context passed through middleware chain."""
 
-    operation: str = Field(
-        description="Operation Type: model_call, tool_call, memory_access"
-    )
+    operation: str = Field(description="Operation Type: model_call, tool_call, memory_access")
     agent_name: str = Field(description="Name of the agent executing the operation")
     agent_context: AgentContext = Field(description="The agent's context")
-    data: Any = Field(
-        description="Operation-Specific data (messages, tool request, etc)"
-    )
+    data: Any = Field(description="Operation-Specific data (messages, tool request, etc)")
     metadata: Dict[str, Any] = Field(
         default_factory=dict, description="Additional metadata for middleware use"
     )
@@ -45,7 +40,7 @@ class MiddlewareContext(BaseModel):
 
 class BaseMiddleware(ABC):
     """Abstract base class for middleware components.
-    
+
     Middleware intercepts agent operation and can:
     - Emit events for observability (logs, metrics, approval requests)
     - Transform requests / responses
@@ -83,11 +78,11 @@ class BaseMiddleware(ABC):
                 if needs_approval:
                     yield ToolApprovalEvent(approval_request=req)
                     return # Pause - don't yield context
-                
+
                 # continue execution
                 yield context
             ```
-        
+
         Raises:
             Exception: to abort the execution (caught and handled by proces_error)
         """
@@ -156,12 +151,13 @@ class BaseMiddleware(ABC):
             yield
         raise error
 
+
 class MiddlewareChain:
     """Executes a chain of middleware as async generator pipelines."""
 
-    def __init__(self, middlewares: Optional[List[BaseMiddleware]]=None):
+    def __init__(self, middlewares: Optional[List[BaseMiddleware]] = None):
         """Initialized the middleware chain.
-        
+
         Args:
             middlewares: List of middlewares to execute in order
         """
@@ -183,10 +179,10 @@ class MiddlewareChain:
         agent_context: AgentContext,
         data: Any,
         func: Callable,
-        metadata: Optional[Dict[str, Any]] = None
+        metadata: Optional[Dict[str, Any]] = None,
     ) -> AsyncGenerator[Union[Any, "AgentEvent"], None]:
         """Execute the middleware chain with streaming support.
-        
+
         This method process requests thourgh middleware, execute the operation,
         and process reponses, all while yielding events for observability.
 
@@ -219,11 +215,11 @@ class MiddlewareChain:
         )
 
         # Execution Flow
-        
+
         # PHASE 1: Pre-process thorugh all midlewares (forward order)
         for middleware in self.middlewares:
             try:
-                final_ctx=None
+                final_ctx = None
                 async for item in middleware.process_request(ctx):
                     # Events imported here to avoid circular dependency
                     from .types import (
@@ -247,26 +243,26 @@ class MiddlewareChain:
                     elif isinstance(
                         item,
                         (
-                        ErrorEvent,
-                        FatalErrorEvent,
-                        MemoryRetrievalEvent,
-                        MemoryUpdateEvent,
-                        ModelCallEvent,
-                        ModelResponseEvent,
-                        TaskCompleteEvent,
-                        TaskStartEvent,
-                        ToolApprovalEvent,
-                        ToolCallEvent,
-                        ToolCallResponseEvent,
-                        ToolValidationEvent,
-                        )
+                            ErrorEvent,
+                            FatalErrorEvent,
+                            MemoryRetrievalEvent,
+                            MemoryUpdateEvent,
+                            ModelCallEvent,
+                            ModelResponseEvent,
+                            TaskCompleteEvent,
+                            TaskStartEvent,
+                            ToolApprovalEvent,
+                            ToolCallEvent,
+                            ToolCallResponseEvent,
+                            ToolValidationEvent,
+                        ),
                     ):
                         # Middleware emitted an event
                         yield item
 
                         if isinstance(item, ToolApprovalEvent):
-                            return # Stop - wait for approval
-                
+                            return  # Stop - wait for approval
+
                 if final_ctx is None:
                     # Middleware didn't yield context - it must be paused
                     return
@@ -308,23 +304,23 @@ class MiddlewareChain:
                                     ToolCallEvent,
                                     ToolCallResponseEvent,
                                     ToolValidationEvent,
-                                )
+                                ),
                             ):
                                 yield item
                             else:
                                 # Middleware recovered - yield recovery value and stop
                                 yield item
-                                recovered=True
+                                recovered = True
                                 return
                     except Exception:
                         continue
-                
+
                 if not recovered:
                     raise e
 
         # PHASE 2: Execute actual operation
         # result is guranteed to be assigned before PHASE 3 due to exception handling
-        result : Any
+        result: Any
         try:
             result = await func(self.data)
         except Exception as e:
@@ -381,7 +377,6 @@ class MiddlewareChain:
             # If we reach here, middleware recovered but didn't return (shouldn't happen)
             # This path is unreachable in practice, but we assign result for type checker
             raise RuntimeError("Middleware recovery logic error")  # pragma: no cover
- 
 
         # PHASE 3: Post-process through middleware (reverse order)
         for middleware in reversed(self.middlewares):
@@ -492,7 +487,7 @@ class LoggingMiddleware(BaseMiddleware):
         self.logger = logger or logging.getLogger(__name__)
 
     async def process_request(
-            self, context: MiddlewareContext
+        self, context: MiddlewareContext
     ) -> AsyncGenerator[Union[MiddlewareContext, "AgentEvent"], None]:
         """Log operation start."""
         self.logger.info(
@@ -500,14 +495,14 @@ class LoggingMiddleware(BaseMiddleware):
             extra={
                 "agent": context.agent_name,
                 "operation": context.operation,
-                "session_id": context.agent_context.session_id
-            }
+                "session_id": context.agent_context.session_id,
+            },
         )
         context.metadata["start_time"] = time.time()
         yield context
 
     async def process_response(
-            self, context: MiddlewareContext, result: Any
+        self, context: MiddlewareContext, result: Any
     ) -> AsyncGenerator[Union[Any, "AgentEvent"], None]:
         """Log operation completion."""
         duration = time.time() - context.metadata.get("start_time", 0)
@@ -517,13 +512,13 @@ class LoggingMiddleware(BaseMiddleware):
                 "agent": context.agent_name,
                 "operation": context.operation,
                 "duration": duration,
-                "session_id": context.agent_context.session_id
-            }
+                "session_id": context.agent_context.session_id,
+            },
         )
         yield result
 
     async def process_error(
-            self, context: MiddlewareContext, error: Exception
+        self, context: MiddlewareContext, error: Exception
     ) -> AsyncGenerator[Union[Any, "AgentEvent"], None]:
         """Log operation error."""
         self.logger.error(
@@ -543,17 +538,17 @@ class LoggingMiddleware(BaseMiddleware):
 class RateLimitMiddleware(BaseMiddleware):
     """Rate limit operations per agent."""
 
-    def __init__(self, max_calls_per_minute:int = 60):
+    def __init__(self, max_calls_per_minute: int = 60):
         """Initialize rate limiter.
-        
+
         Args:
-            max_calls_per_minute: Maximum operations allowed per minute    
+            max_calls_per_minute: Maximum operations allowed per minute
         """
         self.max_calls = max_calls_per_minute
         self.call_times: List[float] = []  # Stateful tracking of call times
 
     async def process_request(
-            self, context: MiddlewareContext
+        self, context: MiddlewareContext
     ) -> AsyncGenerator[Union[MiddlewareContext, "AgentEvent"], None]:
         """Check and enforce rate limit."""
         now = time.time()
@@ -566,7 +561,7 @@ class RateLimitMiddleware(BaseMiddleware):
             # Calculate how long to wait
             oldest_call = self.call_times[0]
             wait_time = 60 - (now - oldest_call)
-            if wait_time > - 0:
+            if wait_time > -0:
                 await asyncio.sleep(wait_time)
                 now = time.time()
 
@@ -575,16 +570,16 @@ class RateLimitMiddleware(BaseMiddleware):
         yield context
 
     async def process_response(
-            self, context: MiddlewareContext, result: Any
+        self, context: MiddlewareContext, result: Any
     ) -> AsyncGenerator[Union[Any, "AgentEvent"], None]:
         """No response processing needed."""
         yield result
 
     async def process_error(
-            self, context: MiddlewareContext, error: Exception
+        self, context: MiddlewareContext, error: Exception
     ) -> AsyncGenerator[Union[Any, "AgentEvent"], None]:
         """No error recovery."""
-        if False: # Type checker hint
+        if False:  # Type checker hint
             yield
         raise error
 
@@ -622,9 +617,7 @@ class GuardrailMiddleware(BaseMiddleware):
             params_str = str(params)
             for pattern in self.blocked_patterns:
                 if pattern.search(params_str):
-                    raise ValueError(
-                        f"Tool parameters match blocked pattern: {pattern.pattern}"
-                    )
+                    raise ValueError(f"Tool parameters match blocked pattern: {pattern.pattern}")
 
         elif context.operation == "model_call":
             # Check messages for blocked patterns
@@ -632,9 +625,7 @@ class GuardrailMiddleware(BaseMiddleware):
                 if hasattr(msg, "content"):
                     for pattern in self.blocked_patterns:
                         if pattern.search(msg.content):
-                            raise ValueError(
-                                f"Message contains blocked pattern: {pattern.pattern}"
-                            )
+                            raise ValueError(f"Message contains blocked pattern: {pattern.pattern}")
 
         yield context
 
@@ -687,9 +678,7 @@ class MetricsMiddleware(BaseMiddleware):
 
         # Keep only last 100 durations to avoid memory issues
         if len(self.metrics["operation_durations"]) > 100:
-            self.metrics["operation_durations"] = self.metrics["operation_durations"][
-                -100:
-            ]
+            self.metrics["operation_durations"] = self.metrics["operation_durations"][-100:]
 
         yield result
 
@@ -716,4 +705,3 @@ class MetricsMiddleware(BaseMiddleware):
             **self.metrics,
             "average_duration": avg_duration,
         }
-

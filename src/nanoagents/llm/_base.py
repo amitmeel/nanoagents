@@ -5,7 +5,6 @@ This module defines the interface that all llm providers must implement,
 providing a unified way to interact with different language models.
 """
 
-
 import json
 from abc import ABC, abstractmethod
 from typing import Any, AsyncGenerator, Dict, List, Optional, Type
@@ -21,11 +20,11 @@ class BaseChatCompletionClient(ComponentBase[BaseModel], ABC):
     """
     Abstract base class for LLM provider implementations.
 
-    Provides unified interface for different LLM providers (OpenAI, Anthropic, Google, etc.) 
+    Provides unified interface for different LLM providers (OpenAI, Anthropic, Google, etc.)
     while abstracting away provider specific API differences.
     """
 
-    def __init__(self, model: str, api_key:Optional[str]=None, **kwargs:Any):
+    def __init__(self, model: str, api_key: Optional[str] = None, **kwargs: Any):
         """
         Initialize the chat completion client.
 
@@ -48,7 +47,7 @@ class BaseChatCompletionClient(ComponentBase[BaseModel], ABC):
     ) -> ChatCompletionResult:
         """
         Make a single LLM API call.
-        
+
         Args:
             messages: List of messages to send to the LLM
             tools: Optional list of tools available to the LLM
@@ -79,7 +78,7 @@ class BaseChatCompletionClient(ComponentBase[BaseModel], ABC):
             tools: Optional list of tools available to the LLM
             output_format: Optional Pydantic model for structured output
             **kwargs: Additional parameters (temprature, max_token, etc.)
-        
+
         Yields:
             ChatCompletionChunk object with incremental response data.
 
@@ -88,9 +87,7 @@ class BaseChatCompletionClient(ComponentBase[BaseModel], ABC):
         """
         pass
 
-    def _convert_messages_to_api_format(
-            self, messages: List[Message]
-    ) -> List[Dict[str, Any]]:
+    def _convert_messages_to_api_format(self, messages: List[Message]) -> List[Dict[str, Any]]:
         """
         Convert internal Message object to provider-specific API format.
 
@@ -120,7 +117,7 @@ class BaseChatCompletionClient(ComponentBase[BaseModel], ABC):
 
                     # Add text part if there's text content
                     if msg.content and msg.content.strip():
-                        content_parts.append({"type": "text", "text":msg.content})
+                        content_parts.append({"type": "text", "text": msg.content})
 
                     # Add media part
                     if msg.is_image():
@@ -155,7 +152,7 @@ class BaseChatCompletionClient(ComponentBase[BaseModel], ABC):
                                 "arguments": json.dumps(tc.parameters)
                                 if isinstance(tc.parameters, dict)
                                 else tc.parameters,
-                            }
+                            },
                         }
                         for tc in msg.tool_calls
                     ]
@@ -163,7 +160,7 @@ class BaseChatCompletionClient(ComponentBase[BaseModel], ABC):
                 # Handle tool message
                 if isinstance(msg, ToolMessage):
                     api_msg["tool_call_id"] = msg.tool_call_id
-            
+
             api_messages.append(api_msg)
 
         return api_messages
@@ -173,10 +170,10 @@ class BaseChatCompletionError(Exception):
     """Raises when a chat completion API call fails."""
 
     def __init__(
-            self,
-            message: str,
-            status_code: Optional[int] = None,
-            response_data: Optional[Dict[str, Any]] = None,
+        self,
+        message: str,
+        status_code: Optional[int] = None,
+        response_data: Optional[Dict[str, Any]] = None,
     ):
         self.status_code = status_code
         self.response_data = response_data
